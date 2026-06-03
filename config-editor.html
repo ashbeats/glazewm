@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GlazeWM Config Editor - ReactFlow</title>
-    <link rel="stylesheet" href="https://unpkg.com/@reactflow/core@11/dist/style.css">
+    <title>GlazeWM Config Editor</title>
     <style>
         * {
             margin: 0;
@@ -54,6 +53,7 @@
             flex: 1;
             position: relative;
             overflow: hidden;
+            background: #fafafa;
         }
 
         .editor-section {
@@ -100,15 +100,13 @@
             background: #555;
         }
 
-        /* Custom SVG Flowchart */
-        #flowchart {
+        svg {
             width: 100%;
             height: 100%;
             cursor: grab;
-            position: absolute;
         }
 
-        #flowchart:active {
+        svg:active {
             cursor: grabbing;
         }
 
@@ -126,6 +124,7 @@
         .node-group:hover .node-rect {
             filter: brightness(0.95);
             stroke-width: 2.5;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
 
         .node-group.selected .node-rect {
@@ -136,7 +135,6 @@
 
         .node-group.leaf .node-rect {
             stroke: #28a745;
-            stroke-width: 2;
         }
 
         .node-group.leaf.selected .node-rect {
@@ -146,7 +144,6 @@
         .node-group.no-keybindings .node-rect {
             stroke: #dc3545;
             fill: #ffe6e6;
-            stroke-width: 2;
         }
 
         .node-group.no-keybindings.selected .node-rect {
@@ -156,9 +153,10 @@
 
         .node-text {
             font-size: 13px;
-            font-weight: 500;
+            font-weight: 600;
             pointer-events: none;
             text-anchor: middle;
+            fill: #333;
         }
 
         .node-group.selected .node-text {
@@ -167,13 +165,14 @@
 
         .node-type {
             font-size: 10px;
-            opacity: 0.6;
+            opacity: 0.7;
             pointer-events: none;
             text-anchor: middle;
+            fill: #666;
         }
 
         .node-group.selected .node-type {
-            fill: white;
+            fill: rgba(255,255,255,0.9);
         }
 
         .edge {
@@ -270,15 +269,6 @@
             box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
         }
 
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-
-        .btn-secondary:hover {
-            background: #5a6268;
-        }
-
         .controls {
             display: flex;
             gap: 8px;
@@ -350,29 +340,18 @@
             padding: 10px;
             font-family: 'Courier New', monospace;
             font-size: 11px;
-            max-height: 200px;
+            max-height: 150px;
             overflow-y: auto;
             margin-top: 10px;
             line-height: 1.4;
             color: #333;
+            word-break: break-all;
         }
 
         .no-selection {
             text-align: center;
             color: #999;
             padding: 40px 20px;
-        }
-
-        @media (max-width: 768px) {
-            .editor-section {
-                display: none;
-            }
-        }
-
-        .header-title {
-            display: flex;
-            align-items: center;
-            gap: 10px;
         }
 
         .zoom-controls {
@@ -417,13 +396,19 @@
             display: flex;
             align-items: center;
         }
+
+        @media (max-width: 768px) {
+            .editor-section {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="app-container">
         <div class="flowchart-section">
             <div class="flowchart-header">
-                <div class="header-title">
+                <div style="display: flex; align-items: center; gap: 10px;">
                     <span>📊</span>
                     <span>GlazeWM Config Schema</span>
                 </div>
@@ -444,32 +429,10 @@
                 <span>✏️</span>
                 <span>Properties</span>
             </div>
-            <div class="editor-content">
-                <div class="controls">
-                    <button class="control-btn" onclick="exportConfig()">📥 Export</button>
-                    <button class="control-btn" onclick="clearSelection()">✕ Clear</button>
-                </div>
-
-                <div class="legend">
-                    <div class="legend-item">
-                        <div class="legend-color config"></div>
-                        <span>Config</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color leaf"></div>
-                        <span>Has Children</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color no-keys"></div>
-                        <span>No Keybindings</span>
-                    </div>
-                </div>
-
-                <div id="editorContent">
-                    <div class="no-selection">
-                        <div style="font-size: 24px; margin-bottom: 10px;">👆</div>
-                        <div>Click a node to view properties</div>
-                    </div>
+            <div class="editor-content" id="editorContent">
+                <div class="no-selection">
+                    <div style="font-size: 24px; margin-bottom: 10px;">👆</div>
+                    <div>Click a node to view properties</div>
                 </div>
             </div>
         </div>
@@ -589,6 +552,7 @@
         let panX = 0;
         let panY = 0;
         let nodePositions = {};
+        let svgGroup = null;
 
         function initFlowchart() {
             const svg = document.getElementById('flowchart');
@@ -611,6 +575,10 @@
             defs.appendChild(marker);
             svg.appendChild(defs);
 
+            // Create main group for transform
+            svgGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            svg.appendChild(svgGroup);
+
             // Organize nodes by level
             const layers = {};
             Object.keys(schemaData).forEach(name => {
@@ -626,13 +594,13 @@
                 const spacing = 250;
                 nodes.forEach((name, idx) => {
                     nodePositions[name] = {
-                        x: idx * spacing - (nodes.length * spacing) / 2 + width / 2,
-                        y: level * 200 + 100
+                        x: idx * spacing - (nodes.length * spacing) / 2,
+                        y: level * 200
                     };
                 });
             });
 
-            // Draw edges
+            // Draw edges first (so they appear behind nodes)
             Object.keys(schemaData).forEach(name => {
                 const schema = schemaData[name];
                 if (schema.children) {
@@ -644,13 +612,13 @@
                             line.setAttribute('y1', nodePositions[name].y + 40);
                             line.setAttribute('x2', nodePositions[child].x);
                             line.setAttribute('y2', nodePositions[child].y - 40);
-                            svg.appendChild(line);
+                            svgGroup.appendChild(line);
                         }
                     });
                 }
             });
 
-            // Draw nodes
+            // Draw nodes on top
             Object.keys(nodePositions).forEach(name => {
                 const pos = nodePositions[name];
                 const schema = schemaData[name];
@@ -689,12 +657,18 @@
                 g.appendChild(text);
                 g.appendChild(typeText);
 
-                g.addEventListener('click', () => selectNode(name, schema));
-                svg.appendChild(g);
+                g.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    selectNode(name);
+                });
+
+                svgGroup.appendChild(g);
             });
 
-            // Mouse events
-            svg.addEventListener('wheel', (e) => {
+            // SVG mouse events
+            const svg_elem = document.getElementById('flowchart');
+            
+            svg_elem.addEventListener('wheel', (e) => {
                 e.preventDefault();
                 const delta = e.deltaY > 0 ? 0.9 : 1.1;
                 zoomLevel = Math.max(0.5, Math.min(3, zoomLevel * delta));
@@ -704,15 +678,15 @@
             let panning = false;
             let startX, startY;
 
-            svg.addEventListener('mousedown', (e) => {
-                if (e.target.tagName === 'svg' || e.target.tagName === 'line') {
+            svg_elem.addEventListener('mousedown', (e) => {
+                if (e.target === svg_elem || e.target.tagName === 'line') {
                     panning = true;
                     startX = e.clientX;
                     startY = e.clientY;
                 }
             });
 
-            svg.addEventListener('mousemove', (e) => {
+            svg_elem.addEventListener('mousemove', (e) => {
                 if (panning) {
                     panX += e.clientX - startX;
                     panY += e.clientY - startY;
@@ -722,7 +696,7 @@
                 }
             });
 
-            svg.addEventListener('mouseup', () => {
+            svg_elem.addEventListener('mouseup', () => {
                 panning = false;
             });
 
@@ -732,33 +706,23 @@
         }
 
         function updateView() {
-            const svg = document.getElementById('flowchart');
-            const elements = svg.querySelectorAll('.node-group, .edge, defs');
-            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            g.setAttribute('transform', `translate(${panX}, ${panY}) scale(${zoomLevel})`);
-            
-            elements.forEach(el => {
-                if (el.tagName !== 'defs') {
-                    const clone = el.cloneNode(true);
-                    g.appendChild(clone);
-                }
-            });
-
-            const children = Array.from(svg.children);
-            children.forEach(child => {
-                if (child.tagName !== 'defs') {
-                    svg.removeChild(child);
-                }
-            });
-
-            svg.appendChild(g);
+            if (svgGroup) {
+                svgGroup.setAttribute('transform', `translate(${panX}, ${panY}) scale(${zoomLevel})`);
+            }
             document.getElementById('zoomLevel').textContent = Math.round(zoomLevel * 100) + '%';
         }
 
-        function selectNode(name, schema) {
+        function selectNode(name) {
             selectedNode = name;
-            document.querySelectorAll('.node-group').forEach(n => n.classList.remove('selected'));
+            const schema = schemaData[name];
+            
+            // Update visual selection
+            document.querySelectorAll('.node-group').forEach(n => {
+                n.classList.remove('selected');
+            });
             document.querySelector(`[data-node="${name}"]`).classList.add('selected');
+            
+            // Update properties panel
             updatePropertyPanel(name, schema);
         }
 
@@ -766,41 +730,52 @@
             const content = document.getElementById('editorContent');
             let html = '';
 
+            html += '<div class="controls">';
+            html += '<button class="control-btn" onclick="exportConfig()">📥 Export</button>';
+            html += '<button class="control-btn" onclick="clearSelection()">✕ Clear</button>';
+            html += '</div>';
+
+            html += '<div class="legend">';
+            html += '<div class="legend-item"><div class="legend-color config"></div><span>Config</span></div>';
+            html += '<div class="legend-item"><div class="legend-color leaf"></div><span>Has Children</span></div>';
+            html += '<div class="legend-item"><div class="legend-color no-keys"></div><span>No Keybindings</span></div>';
+            html += '</div>';
+
             if (schema.noKeybindings) {
                 html += '<div class="info-box error">⚠️ This node does NOT support keybindings</div>';
             } else if (schema.hasKeybindings) {
                 html += '<div class="info-box">✅ This node supports keybindings</div>';
             }
 
-            html += `
-                <div class="form-group">
-                    <label>Node Name</label>
-                    <input type="text" value="${name}" readonly>
-                </div>
-                <div class="form-group">
-                    <label>Type</label>
-                    <input type="text" value="${schema.type}" readonly>
-                </div>
-                <div class="form-group">
-                    <label>Parent Node</label>
-                    <input type="text" value="${schema.parent || 'N/A'}" readonly>
-                </div>
-                <div class="form-group">
-                    <label>Description</label>
-                    <textarea readonly>${schema.description}</textarea>
-                </div>
-            `;
+            html += '<div class="form-group">';
+            html += '<label>Node Name</label>';
+            html += `<input type="text" value="${name}" readonly>`;
+            html += '</div>';
+
+            html += '<div class="form-group">';
+            html += '<label>Type</label>';
+            html += `<input type="text" value="${schema.type}" readonly>`;
+            html += '</div>';
+
+            html += '<div class="form-group">';
+            html += '<label>Parent Node</label>';
+            html += `<input type="text" value="${schema.parent || 'N/A'}" readonly>`;
+            html += '</div>';
+
+            html += '<div class="form-group">';
+            html += '<label>Description</label>';
+            html += `<textarea readonly>${schema.description}</textarea>`;
+            html += '</div>';
 
             if (schema.children && schema.children.length > 0) {
-                html += `
-                    <div class="form-group">
-                        <label>Children (${schema.children.length})</label>
-                        <div class="json-preview">${JSON.stringify(schema.children, null, 2)}</div>
-                    </div>
-                `;
+                html += '<div class="form-group">';
+                html += `<label>Children (${schema.children.length})</label>`;
+                html += `<div class="json-preview">${JSON.stringify(schema.children, null, 2)}</div>`;
+                html += '</div>';
             }
 
             html += '<div class="button-group"><button class="btn-primary" onclick="copyToClipboard()">Copy JSON</button></div>';
+
             content.innerHTML = html;
         }
 
@@ -812,7 +787,7 @@
                     type: schema.type,
                     description: schema.description,
                     children: schema.children || [],
-                    parent: schema.parent
+                    parent: schema.parent || 'N/A'
                 }, null, 2);
                 navigator.clipboard.writeText(text).then(() => {
                     alert('✅ Copied to clipboard!');
@@ -852,6 +827,7 @@
             zoomLevel = 1;
             panX = 0;
             panY = 0;
+            clearSelection();
             updateView();
         }
 
