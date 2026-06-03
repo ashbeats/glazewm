@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GlazeWM Config Editor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 5px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        header p {
+            font-size: 1em;
+            opacity: 0.9;
+        }
+
+        .content-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 1200px) {
+            .content-wrapper {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .panel-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            font-size: 1.3em;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel-body {
+            padding: 20px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        /* Flowchart Canvas */
+        #flowchart {
+            width: 100%;
+            height: 600px;
+            background: #f8f9fa;
+            border-radius: 0 0 12px 12px;
+            cursor: grab;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #flowchart:active {
+            cursor: grabbing;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Node Styling */
+        .node {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .node:hover rect {
+            filter: brightness(0.95);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .node rect {
+            fill: white;
+            stroke: #667eea;
+            stroke-width: 2;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .node text {
+            font-size: 13px;
+            font-weight: 500;
+            pointer-events: none;
+            text-anchor: middle;
+        }
+
+        .node.selected rect {
+            fill: #667eea;
+            stroke: #764ba2;
+            stroke-width: 3;
+        }
+
+        .node.selected text {
+            fill: white;
+        }
+
+        .node.leaf rect {
+            stroke: #28a745;
+            fill: #f0f8f4;
+        }
+
+        .node.leaf.selected rect {
+            fill: #28a745;
+        }
+
+        .node.no-children rect {
+            stroke: #dc3545;
+            fill: #ffe6e6;
+        }
+
+        .node.no-children.selected rect {
+            fill: #dc3545;
+        }
+
+        /* Connections */
+        .connection {
+            stroke: #999;
+            stroke-width: 2;
+            fill: none;
+            marker-end: url(#arrowhead);
+        }
+
+        .connection.highlight {
+            stroke: #667eea;
+            stroke-width: 3;
+        }
+
+        /* Form Panel */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .form-group.empty {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .form-group.empty label::after {
+            content: ' (Select a node to edit)';
+            color: #999;
+            font-weight: normal;
+        }
+
+        .info-box {
+            background: #f0f8f4;
+            border-left: 4px solid #28a745;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 15px;
+        }
+
+        .info-box.warning {
+            background: #fff3cd;
+            border-left-color: #ffc107;
+        }
+
+        .info-box.error {
+            background: #ffe6e6;
+            border-left-color: #dc3545;
+        }
+
+        /* Buttons */
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Tree View */
+        .tree-view {
+            list-style: none;
+            font-size: 13px;
+        }
+
+        .tree-view li {
+            margin-bottom: 8px;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .tree-view li:hover {
+            background: #e9ecef;
+            border-left-color: #667eea;
+        }
+
+        .tree-view li.selected {
+            background: #667eea;
+            color: white;
+            border-left-color: #764ba2;
+        }
+
+        .tree-view li.selectable:hover {
+            transform: translateX(4px);
+        }
+
+        .tree-indent {
+            padding-left: 20px;
+        }
+
+        /* JSON Output */
+        .json-output {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            max-height: 300px;
+            overflow-y: auto;
+            color: #333;
+            line-height: 1.4;
+        }
+
+        /* Controls */
+        .controls {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .controls-inner {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .control-btn {
+            padding: 10px 16px;
+            background: white;
+            border: 2px solid #667eea;
+            color: #667eea;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .control-btn:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .control-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        /* Animations */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .panel {
+            animation: slideIn 0.3s ease;
+        }
+
+        .zoom-level {
+            display: inline-block;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            font-size: 12px;
+            margin-top: 15px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border: 2px solid;
+            border-radius: 3px;
+        }
+
+        .legend-color.config {
+            border-color: #667eea;
+            background: white;
+        }
+
+        .legend-color.leaf {
+            border-color: #28a745;
+            background: #f0f8f4;
+        }
+
+        .legend-color.no-children {
+            border-color: #dc3545;
+            background: #ffe6e6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎨 GlazeWM Config Editor</h1>
+            <p>Interactive configuration schema browser and editor</p>
+        </header>
+
+        <div class="controls">
+            <div class="controls-inner">
+                <button class="control-btn active" onclick="resetZoom()">Reset View</button>
+                <button class="control-btn" onclick="exportConfig()">📥 Export Config</button>
+                <button class="control-btn" onclick="importConfig()">📤 Import Config</button>
+                <button class="control-btn" onclick="clearSelection()">Clear Selection</button>
+                <span class="zoom-level" id="zoomLevel">Zoom: 100%</span>
+            </div>
+            <div class="legend" style="margin-top: 12px;">
+                <div class="legend-item">
+                    <div class="legend-color config"></div>
+                    <span>Config Object</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color leaf"></div>
+                    <span>Has Children</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color no-children"></div>
+                    <span>No Keybindings</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-wrapper">
+            <div class="panel">
+                <div class="panel-header">📊 Schema Flowchart</div>
+                <svg id="flowchart"></svg>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">✏️ Editor & Properties</div>
+                <div class="panel-body">
+                    <div id="nodeInfo" class="info-box" style="display: none;"></div>
+                    
+                    <form id="configForm">
+                        <div class="form-group empty">
+                            <label>Node Name</label>
+                            <input type="text" id="nodeName" readonly>
+                        </div>
+
+                        <div class="form-group empty">
+                            <label>Node Type</label>
+                            <input type="text" id="nodeType" readonly>
+                        </div>
+
+                        <div class="form-group empty">
+                            <label>Description</label>
+                            <textarea id="nodeDescription" readonly></textarea>
+                        </div>
+
+                        <div class="form-group empty">
+                            <label>Parent Node</label>
+                            <input type="text" id="nodeParent" readonly>
+                        </div>
+
+                        <div class="form-group empty">
+                            <label>Children (JSON)</label>
+                            <textarea id="nodeChildren" readonly></textarea>
+                        </div>
+                    </form>
+
+                    <div class="button-group">
+                        <button class="btn-primary" onclick="centerNodeView()">Center View</button>
+                        <button class="btn-secondary" onclick="toggleDetails()">Show Details</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">📋 Config Structure (JSON)</div>
+            <div class="panel-body">
+                <div id="configPreview" class="json-output"></div>
+                <div class="button-group">
+                    <button class="btn-success" onclick="copyToClipboard()">Copy JSON</button>
+                    <button class="btn-secondary" onclick="validateConfig()">Validate</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Schema Data
+        const schema = {
+            ParsedConfig: {
+                type: 'root',
+                description: 'Root configuration object for GlazeWM',
+                children: [
+                    'binding_modes',
+                    'gaps',
+                    'general',
+                    'keybindings',
+                    'window_behavior',
+                    'window_effects',
+                    'window_rules',
+                    'workspaces'
+                ],
+                details: {
+                    hasKeybindings: true,
+                    canHaveChildren: true,
+                    level: 0
+                }
+            },
+            binding_modes: {
+                type: 'array',
+                parent: 'ParsedConfig',
+                description: 'Collection of custom binding modes',
+                children: ['BindingModeConfig'],
+                details: { hasKeybindings: true, level: 1 }
+            },
+            BindingModeConfig: {
+                type: 'struct',
+                parent: 'binding_modes',
+                description: 'Individual binding mode configuration',
+                children: ['name', 'display_name', 'keybindings'],
+                details: { hasKeybindings: true, level: 2 }
+            },
+            gaps: {
+                type: 'struct',
+                parent: 'ParsedConfig',
+                description: 'Window spacing and margins configuration',
+                children: ['scale_with_dpi', 'inner_gap', 'outer_gap', 'single_window_outer_gap'],
+                details: { hasKeybindings: false, level: 1 }
+            },
+            general: {
+                type: 'struct',
+                parent: 'ParsedConfig',
+                description: 'Global window manager behavior settings',
+                children: ['cursor_jump', 'focus_follows_cursor', 'startup_commands', 'hide_method'],
+                details: { hasKeybindings: false, level: 1 }
+            },
+            keybindings: {
+                type: 'array',
+                parent: 'ParsedConfig',
+                description: 'Global keyboard shortcuts',
+                children: ['KeybindingConfig'],
+                details: { hasKeybindings: true, level: 1 }
+            },
+            KeybindingConfig: {
+                type: 'struct',
+                parent: 'keybindings',
+                description: 'Individual keybinding with commands',
+                children: ['bindings', 'commands'],
+                details: { hasKeybindings: false, level: 2 }
+            },
+            window_behavior: {
+                type: 'struct',
+                parent: 'ParsedConfig',
+                description: 'Default behavior for new windows',
+                children: ['initial_state', 'state_defaults'],
+                details: { hasKeybindings: false, level: 1 }
+            },
+            window_effects: {
+                type: 'struct',
+                parent: 'ParsedConfig',
+                description: 'Visual styling for focused and unfocused windows',
+                children: ['focused_window', 'other_windows'],
+                details: { hasKeybindings: false, level: 1 }
+            },
+            window_rules: {
+                type: 'array',
+                parent: 'ParsedConfig',
+                description: 'Rules for applying commands to specific windows',
+                children: ['WindowRuleConfig'],
+                details: { hasKeybindings: false, level: 1 }
+            },
+            WindowRuleConfig: {
+                type: 'struct',
+                parent: 'window_rules',
+                description: 'Individual window rule configuration',
+                children: ['commands', 'match_window', 'on', 'run_once'],
+                details: { hasKeybindings: false, level: 2 }
+            },
+            workspaces: {
+                type: 'array',
+                parent: 'ParsedConfig',
+                description: 'Virtual workspace definitions',
+                children: ['WorkspaceConfig'],
+                details: { hasKeybindings: false, level: 1 }
+            },
+            WorkspaceConfig: {
+                type: 'struct',
+                parent: 'workspaces',
+                description: 'Individual workspace configuration (❌ NO KEYBINDINGS)',
+                children: ['name', 'display_name', 'bind_to_monitor', 'keep_alive'],
+                details: { hasKeybindings: false, level: 2, noKeybindings: true }
+            }
+        };
+
+        let selectedNode = null;
+        let zoomLevel = 1;
+        let panX = 0;
+        let panY = 0;
+
+        // Initialize flowchart
+        function initFlowchart() {
+            const svg = document.getElementById('flowchart');
+            const width = svg.clientWidth;
+            const height = svg.clientHeight;
+
+            // Add arrow marker
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+            marker.setAttribute('id', 'arrowhead');
+            marker.setAttribute('markerWidth', '10');
+            marker.setAttribute('markerHeight', '10');
+            marker.setAttribute('refX', '9');
+            marker.setAttribute('refY', '3');
+            marker.setAttribute('orient', 'auto');
+            const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            polygon.setAttribute('points', '0 0, 10 3, 0 6');
+            polygon.setAttribute('fill', '#999');
+            marker.appendChild(polygon);
+            defs.appendChild(marker);
+            svg.appendChild(defs);
+
+            // Create nodes
+            const nodePositions = {};
+            let nodeCount = 0;
+            const layer = {};
+
+            // Organize nodes by level
+            Object.keys(schema).forEach(nodeName => {
+                const level = schema[nodeName].details.level;
+                if (!layer[level]) layer[level] = [];
+                layer[level].push(nodeName);
+            });
+
+            // Position nodes
+            Object.keys(layer).forEach(levelKey => {
+                const level = parseInt(levelKey);
+                const nodesInLevel = layer[level];
+                const levelHeight = 120;
+                const nodeWidth = 140;
+                const horizontalSpacing = 160;
+
+                nodesInLevel.forEach((nodeName, index) => {
+                    const x = 100 + index * horizontalSpacing;
+                    const y = 100 + level * levelHeight;
+                    nodePositions[nodeName] = { x, y };
+                });
+            });
+
+            // Draw connections
+            Object.keys(schema).forEach(nodeName => {
+                const node = schema[nodeName];
+                if (node.children && node.children.length > 0) {
+                    node.children.forEach(childName => {
+                        if (nodePositions[childName]) {
+                            const x1 = nodePositions[nodeName].x;
+                            const y1 = nodePositions[nodeName].y + 40;
+                            const x2 = nodePositions[childName].x;
+                            const y2 = nodePositions[childName].y - 40;
+
+                            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                            line.setAttribute('x1', x1);
+                            line.setAttribute('y1', y1);
+                            line.setAttribute('x2', x2);
+                            line.setAttribute('y2', y2);
+                            line.setAttribute('class', 'connection');
+                            svg.appendChild(line);
+                        }
+                    });
+                }
+            });
+
+            // Draw nodes
+            Object.keys(nodePositions).forEach(nodeName => {
+                const pos = nodePositions[nodeName];
+                const nodeData = schema[nodeName];
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.setAttribute('class', 'node');
+                if (nodeData.children && nodeData.children.length > 0) {
+                    g.classList.add('leaf');
+                }
+                if (nodeData.details.noKeybindings) {
+                    g.classList.add('no-children');
+                }
+                g.setAttribute('data-node', nodeName);
+
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('x', pos.x - 70);
+                rect.setAttribute('y', pos.y - 35);
+                rect.setAttribute('width', '140');
+                rect.setAttribute('height', '70');
+                rect.setAttribute('rx', '6');
+
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', pos.x);
+                text.setAttribute('y', pos.y);
+                text.setAttribute('dy', '0.3em');
+                text.textContent = nodeName;
+
+                g.appendChild(rect);
+                g.appendChild(text);
+
+                g.addEventListener('click', () => selectNode(nodeName, pos));
+                svg.appendChild(g);
+            });
+
+            // Pan and zoom
+            svg.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? 0.9 : 1.1;
+                zoomLevel *= delta;
+                zoomLevel = Math.max(0.5, Math.min(3, zoomLevel));
+                updateZoom();
+            });
+
+            let panning = false;
+            let startX, startY;
+
+            svg.addEventListener('mousedown', (e) => {
+                if (e.button === 2 || e.target.tagName === 'svg') {
+                    panning = true;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                }
+            });
+
+            svg.addEventListener('mousemove', (e) => {
+                if (panning) {
+                    panX += e.clientX - startX;
+                    panY += e.clientY - startY;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    updateZoom();
+                }
+            });
+
+            svg.addEventListener('mouseup', () => {
+                panning = false;
+            });
+
+            svg.addEventListener('contextmenu', (e) => e.preventDefault());
+        }
+
+        function updateZoom() {
+            const svg = document.getElementById('flowchart');
+            const g = svg.querySelector('g[data-transform]') || (() => {
+                const newG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                newG.setAttribute('data-transform', 'true');
+                while (svg.children.length > 1) {
+                    newG.appendChild(svg.children[1]);
+                }
+                svg.appendChild(newG);
+                return newG;
+            })();
+
+            g.setAttribute('transform', `translate(${panX}, ${panY}) scale(${zoomLevel})`);
+            document.getElementById('zoomLevel').textContent = `Zoom: ${Math.round(zoomLevel * 100)}%`;
+        }
+
+        function selectNode(nodeName, pos) {
+            selectedNode = nodeName;
+            document.querySelectorAll('.node').forEach(n => n.classList.remove('selected'));
+            document.querySelector(`[data-node="${nodeName}"]`).classList.add('selected');
+            updateForm(nodeName);
+            updatePreview();
+        }
+
+        function updateForm(nodeName) {
+            const node = schema[nodeName];
+            document.getElementById('nodeName').value = nodeName;
+            document.getElementById('nodeType').value = node.type;
+            document.getElementById('nodeDescription').value = node.description;
+            document.getElementById('nodeParent').value = node.parent || 'N/A';
+            document.getElementById('nodeChildren').value = JSON.stringify(node.children || [], null, 2);
+
+            const infoBox = document.getElementById('nodeInfo');
+            if (node.details.noKeybindings) {
+                infoBox.textContent = '⚠️ This node does NOT support keybindings';
+                infoBox.className = 'info-box error';
+                infoBox.style.display = 'block';
+            } else if (node.details.hasKeybindings) {
+                infoBox.textContent = '✅ This node supports keybindings';
+                infoBox.className = 'info-box';
+                infoBox.style.display = 'block';
+            } else {
+                infoBox.style.display = 'none';
+            }
+
+            document.querySelectorAll('.form-group').forEach(fg => {
+                fg.classList.remove('empty');
+            });
+        }
+
+        function updatePreview() {
+            const config = {
+                ParsedConfig: {
+                    binding_modes: [],
+                    gaps: {},
+                    general: {},
+                    keybindings: [],
+                    window_behavior: {},
+                    window_effects: {},
+                    window_rules: [],
+                    workspaces: []
+                }
+            };
+
+            if (selectedNode) {
+                config.selectedNode = selectedNode;
+                config.nodeInfo = {
+                    type: schema[selectedNode].type,
+                    hasKeybindings: schema[selectedNode].details.hasKeybindings,
+                    children: schema[selectedNode].children || []
+                };
+            }
+
+            document.getElementById('configPreview').textContent = JSON.stringify(config, null, 2);
+        }
+
+        function exportConfig() {
+            const config = JSON.parse(document.getElementById('configPreview').textContent);
+            const json = JSON.stringify(config, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'glazewm-config.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function copyToClipboard() {
+            const text = document.getElementById('configPreview').textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('✅ Config copied to clipboard!');
+            });
+        }
+
+        function validateConfig() {
+            try {
+                const config = JSON.parse(document.getElementById('configPreview').textContent);
+                alert('✅ Config is valid JSON!');
+            } catch (e) {
+                alert('❌ Invalid JSON: ' + e.message);
+            }
+        }
+
+        function clearSelection() {
+            selectedNode = null;
+            document.querySelectorAll('.node').forEach(n => n.classList.remove('selected'));
+            document.querySelectorAll('.form-group').forEach(fg => fg.classList.add('empty'));
+            document.getElementById('nodeInfo').style.display = 'none';
+            updatePreview();
+        }
+
+        function resetZoom() {
+            zoomLevel = 1;
+            panX = 0;
+            panY = 0;
+            updateZoom();
+        }
+
+        function centerNodeView() {
+            if (selectedNode) {
+                resetZoom();
+            }
+        }
+
+        function toggleDetails() {
+            if (selectedNode) {
+                alert(`Details for ${selectedNode}:\n${schema[selectedNode].description}`);
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            initFlowchart();
+            updatePreview();
+        });
+    </script>
+</body>
+</html>
